@@ -169,7 +169,7 @@ def backtest_symbol(symbol):
         return []
 
     today = datetime.now().date()
-    start_t = dt_time(6, 0)
+    start_t = dt_time(23, 59)
     end_t = dt_time(12, 0)
     trades = []
 
