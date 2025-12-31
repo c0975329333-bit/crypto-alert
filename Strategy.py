@@ -2,14 +2,15 @@
 #6-12 signal new
 import pandas as pd
 import requests
-from datetime import datetime, time as dt_time
+import os
 import time
+from datetime import datetime, time as dt_time
 
 # =============================
-# Telegram 設定
+# Telegram（GitHub Actions）
 # =============================
-BOT_TOKEN = "7794879562:AAE4WNHF5JrFqpDg7ITDDj0Q3s9EiG10i_8"
-CHAT_ID = "5414345321"
+BOT_TOKEN = os.environ["7794879562:AAE4WNHF5JrFqpDg7ITDDj0Q3s9EiG10i_8"]
+CHAT_ID = os.environ["5414345321"]
 
 def send_telegram(msg):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -20,6 +21,89 @@ def send_telegram(msg):
     }
     requests.post(url, data=payload)
 
+# =============================
+# 回測參數
+# =============================
+SYMBOLS = ["BTC","ETH","SOL","BNB","XRP","ADA"]
+
+LIMIT = 500
+THRESHOLD_LOWER = 2
+THRESHOLD_UPPER = 2.5
+BASE_URL = "https://min-api.cryptocompare.com/data/v2/histominute"
+
+# =============================
+# 取得 K 線
+# =============================
+def get_klines(symbol):
+    r = requests.get(BASE_URL, params={
+        "fsym": symbol,
+        "tsym": "USDT",
+        "limit": LIMIT,
+        "aggregate": 5,
+        "e": "Binance"
+    }).json()
+
+    if r.get("Response") != "Success":
+        return None
+
+    df = pd.DataFrame(r["Data"]["Data"])
+    df["time"] = (
+        pd.to_datetime(df["time"], unit="s")
+        .dt.tz_localize("UTC")
+        .dt.tz_convert("Asia/Taipei")
+    )
+    df.rename(columns={"volumefrom": "volume"}, inplace=True)
+    df[["open","high","low","close","volume"]] = df[
+        ["open","high","low","close","volume"]
+    ].astype(float)
+
+    return df[["time","open","high","low","close","volume"]]
+
+# =============================
+# 主策略
+# =============================
+def scan(symbol):
+    df = get_klines(symbol)
+    if df is None or len(df) < 30:
+        return None
+
+    today = datetime.now().date()
+
+    for i in range(21, len(df)):
+        if df.time.iloc[i].date() != today:
+            continue
+
+        v0 = df.volume.iloc[i]
+        avg20 = df.volume.iloc[i-21:i].mean()
+
+        if not (avg20 * THRESHOLD_LOWER <= v0 <= avg20 * THRESHOLD_UPPER):
+            continue
+
+        open_p = df.open.iloc[i]
+        close_p = df.close.iloc[i]
+
+        if abs((close_p - open_p) / open_p) <= 0.003:
+            continue
+
+        return f"*{symbol}*  價格：{round(close_p,4)}"
+
+    return None
+
+# =============================
+# 執行
+# =============================
+signals = []
+
+for s in SYMBOLS:
+    r = scan(s)
+    if r:
+        signals.append(r)
+    time.sleep(0.2)
+
+if signals:
+    send_telegram("🚨 *買訊警報*\n\n" + "\n".join(signals))
+else:
+    send_telegram("ℹ️ 今日無符合條件買訊")
 # =============================
 # 回測參數
 # =============================
@@ -151,19 +235,5 @@ for i in range(0, len(all_trades), 20):
             f"*{t['symbol']}* | 計算日: {t['calc_date']} | "
             f"{t['date']} {t['time']} | "
             f"*{t['pct']}%* | 價格: {round(t['price'],4)}\n"
-        )
-    import os
-import requests
-
-BOT_TOKEN = os.environ["7794879562:AAE4WNHF5JrFqpDg7ITDDj0Q3s9EiG10i_8"]
-CHAT_ID = os.environ["5414345321"]
-
-def send_telegram(msg):
-    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": CHAT_ID,
-        "text": msg,
-        "parse_mode": "Markdown"
-    }
-    requests.post(url, data=payload)
+        ）
     time.sleep(5)
