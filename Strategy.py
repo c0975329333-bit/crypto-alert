@@ -8,8 +8,8 @@ from datetime import datetime, time as dt_time
 # =============================
 # Telegram（GitHub Actions / 環境變數）
 # =============================
-BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+BOT_TOKEN = os.getenv("7794879562:AAE4WNHF5JrFqpDg7ITDDj0Q3s9EiG10i_8")
+CHAT_ID = os.getenv("5414345321")
 
 def send_telegram(msg):
     if not BOT_TOKEN or not CHAT_ID:
